@@ -1,0 +1,30 @@
+package com.whatsappclone.backend.common.exception;
+
+import org.springframework.http.HttpStatus;
+
+public enum ErrorCode {
+
+	VALIDATION_ERROR(HttpStatus.BAD_REQUEST),
+	MALFORMED_REQUEST(HttpStatus.BAD_REQUEST),
+	UNAUTHORIZED(HttpStatus.UNAUTHORIZED),
+	FORBIDDEN(HttpStatus.FORBIDDEN),
+	NOT_FOUND(HttpStatus.NOT_FOUND),
+	CONFLICT(HttpStatus.CONFLICT),
+	PHONE_ALREADY_REGISTERED(HttpStatus.CONFLICT),
+	USERNAME_ALREADY_TAKEN(HttpStatus.CONFLICT),
+	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED),
+	CHAT_ACCESS_DENIED(HttpStatus.FORBIDDEN),
+	NOT_CHAT_PARTICIPANT(HttpStatus.FORBIDDEN),
+	RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
+	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
+
+	private final HttpStatus status;
+
+	ErrorCode(HttpStatus status) {
+		this.status = status;
+	}
+
+	public HttpStatus status() {
+		return status;
+	}
+}

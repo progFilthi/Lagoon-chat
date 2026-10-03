@@ -1,0 +1,23 @@
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# IDE - VS Code / Eclipse / NetBeans
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.sts4-cache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+target/
+.next/
+node_modules/

@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: backend
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:whatsapp_clone}
+    username: ${POSTGRES_USER:whatsapp_user}
+    password: ${POSTGRES_PASSWORD:whatsapp_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      pool-name: whatsapp-pool
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3s
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+
+app:
+  jwt:
+    # Override in every non-local environment. Must be >= 32 bytes for HS256.
+    secret: ${JWT_SECRET:dev-only-secret-key-change-me-in-production-0123456789}
+    issuer: whatsapp-clone
+    access-token-ttl: 30d
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  encryption:
+    # Key for encrypting message content at rest. Override outside local dev.
+    content-key: ${MESSAGE_ENCRYPTION_KEY:dev-only-content-key-0123456789abcdef}
+  presence:
+    key-prefix: "presence:"
+
+logging:
+  level:
+    org.hibernate.SQL: INFO
