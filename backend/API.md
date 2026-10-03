@@ -1,93 +1,138 @@
 # Backend API Contract
 
-Base URL `http://localhost:8080`. All responses use the same envelope:
+Base URL `http://localhost:8080`. All responses share one envelope.
+
+**Success**
 
 ```json
-{ "success": true, "data": { }, "error": null, "timestamp": "2026-10-03T15:00:00Z" }
+{ "success": true, "data": {}, "error": null, "timestamp": "2026-10-03T16:28:48Z" }
 ```
 
-Errors replace `data` with `error`:
+**Error**
 
 ```json
-{ "success": false, "data": null,
+{
+  "success": false,
+  "data": null,
   "error": { "code": "VALIDATION_ERROR", "message": "...", "details": { "field": "reason" } },
-  "timestamp": "2026-10-03T15:00:00Z" }
+  "timestamp": "2026-10-03T16:28:48Z"
+}
 ```
 
-`error.code` is a stable machine-readable string from `ErrorCode`; only branch on that, never on
-`message`. HTTP status always matches the error (`VALIDATION_ERROR` → 400, `NOT_FOUND` → 404,
-`NOT_CHAT_PARTICIPANT` → 403, `PHONE_ALREADY_REGISTERED` → 409).
+Branch on `error.code`, never on `message` — the message is for humans and may change.
+`details` is only present for validation errors. The HTTP status always matches the code:
+`VALIDATION_ERROR` → 400, `UNAUTHORIZED` → 401, `NOT_CHAT_PARTICIPANT` → 403, `NOT_FOUND` → 404,
+`PHONE_ALREADY_REGISTERED` / `USERNAME_ALREADY_TAKEN` → 409.
 
-## Authentication
+---
 
-Send the JWT on every protected call:
+## REST
+
+### Auth
+
+| Method | Path | Body | Returns |
+| --- | --- | --- | --- |
+| POST | `/api/auth/register` | `{phoneNumber, username, password}` | 201 + token |
+| POST | `/api/auth/login` | `{phoneNumber, password}` | 200 + token |
+
+`phoneNumber` must be E.164 — `+` then 8–15 digits, no spaces or dashes. `username` is 3–32
+characters, letters/digits/dot/underscore. `password` is 8–72 characters.
+
+Both return:
+
+```json
+{ "accessToken": "...", "tokenType": "Bearer", "expiresIn": 2592000,
+  "user": { "id": "...", "username": "alice", "phoneNumber": "+14155550100",
+            "profilePictureUrl": null, "about": null } }
+```
+
+Tokens last 30 days. There is no refresh token and no logout — discard the token client-side.
+
+Send it on every other request:
 
 ```
 Authorization: Bearer <accessToken>
 ```
 
-Access tokens last 30 days. There is no refresh token and no logout endpoint — discard the token
-client-side.
+### Users
 
-## REST
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/users/sync` | resolve local contacts to registered users |
+| GET | `/api/users/me` | current user |
+| GET | `/api/users/{userId}` | any user's profile |
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| POST | `/api/auth/register` | no | `{phoneNumber, username, password}` → 201 + token |
-| POST | `/api/auth/login` | no | `{phoneNumber, password}` → 200 + token |
-| POST | `/api/users/sync` | yes | `{phoneNumbers: string[]}` → contacts registered here |
-| GET | `/api/users/me` | yes | current user |
-| GET | `/api/users/{userId}` | yes | any user profile |
-| GET | `/api/chats` | yes | all chats, newest activity first, with unread counts |
-| POST | `/api/chats` | yes | create a chat |
-| GET | `/api/chats/{chatId}` | yes | one chat summary |
-| GET | `/api/chats/{chatId}/messages` | yes | keyset-paginated history |
-| POST | `/api/chats/{chatId}/read` | yes | mark the chat read (clears unread count) |
+`POST /api/users/sync` takes `{ "phoneNumbers": ["+1415...", "+4477..."] }`, up to 5000, and
+returns only the ones registered here. Numbers in any format other than E.164 fail validation with
+400, so normalise before sending.
 
-`phoneNumber` must be E.164: `+` then 8–15 digits, no spaces or dashes. Send contacts in the same
-format or `/sync` returns 400.
+### Chats
 
-### Creating a chat
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/chats` | all chats, newest activity first |
+| POST | `/api/chats` | create a chat |
+| GET | `/api/chats/{chatId}` | one chat summary |
+| GET | `/api/chats/{chatId}/messages` | keyset-paginated history |
+| POST | `/api/chats/{chatId}/read` | mark read, clears the unread count |
+
+Creating a chat:
 
 ```json
 { "groupName": null, "memberIds": ["<other-user-id>"] }
 ```
 
-Omit `groupName` for a 1:1 chat — it must contain exactly one other member. Supply `groupName` to
-create a group, which may contain many members. Creating a 1:1 chat that already exists is
-idempotent: you get the existing `chatId` back rather than a duplicate.
+Omit `groupName` for a 1:1 chat, which must contain exactly one other member. Supply `groupName` to
+create a group of up to 255 members. Creating a 1:1 chat that already exists is **idempotent** — you
+get the existing `chatId` back rather than a duplicate, so it is safe to call on every "open chat"
+tap.
 
-### Messages
-
-`GET /api/chats/{chatId}/messages?limit=30&cursor=<opaque>` walks backwards through history, newest
-first. Pass the `nextCursor` from the previous response back as `cursor`. Omit it for the newest
-page. `hasMore` tells you whether to keep going. Never build the cursor yourself, and never assume
-its format — it is opaque base64.
-
-Each message carries a `receipts` summary. For **your own** messages it reports how many recipients
-have received or read it; that is what drives the tick marks. For messages you received it is all
-zeros, since you already know the state.
+Chat summary:
 
 ```json
-{ "id": "...", "chatId": "...", "senderId": "...", "clientMessageId": "...",
-  "content": "decrypted text", "type": "TEXT", "replyToId": null,
-  "createdAt": "2026-10-03T15:26:48.604829Z",
-  "receipts": { "total": 2, "delivered": 2, "read": 1 } }
+{ "id": "...", "group": false, "groupName": null, "groupAvatarUrl": null,
+  "lastMessageAt": "2026-10-03T16:28:48.654937Z",
+  "lastMessagePreview": "message number 3", "lastMessageSenderId": "...",
+  "unreadCount": 2,
+  "participants": [ { "userId": "...", "username": "alice",
+                      "profilePictureUrl": null, "role": "ADMIN", "online": true } ] }
 ```
 
-`type` is one of `TEXT`, `IMAGE`, `VIDEO`, `AUDIO`. `content` is decrypted server-side — send plain
-text. Messages you are not a member of return 403 `NOT_CHAT_PARTICIPANT`.
+### Message history
+
+`GET /api/chats/{chatId}/messages?limit=30&cursor=<opaque>` walks backwards through history, newest
+first. Pass the previous response's `nextCursor` back as `cursor`; omit it for the newest page.
+`limit` defaults to 30 and caps at 100. `hasMore` tells you whether to fetch another page.
+
+Treat the cursor as opaque — it is base64 and its format may change. Building one yourself will
+fail with 400.
+
+```json
+{ "content": [ { "id": "...", "chatId": "...", "senderId": "...", "clientMessageId": "local-uuid",
+                 "content": "hello", "type": "TEXT", "replyToId": null,
+                 "createdAt": "2026-10-03T16:28:48.654937Z",
+                 "receipts": { "total": 2, "delivered": 2, "read": 1 } } ],
+  "size": 30, "hasMore": true, "nextCursor": "MTc5MTA..." }
+```
+
+`type` is `TEXT`, `IMAGE`, `VIDEO` or `AUDIO`.
+
+`receipts` is only meaningful on **your own** messages — that is what drives the tick marks. For
+messages you received it is all zeros, because you already know the state. `content` is decrypted
+server-side, so send and expect plain text.
+
+Non-members get 403 `NOT_CHAT_PARTICIPANT`.
+
+---
 
 ## WebSocket
 
-Endpoint `ws://localhost:8080/ws`, STOMP subprotocol `v12.stomp`.
+`ws://localhost:8080/ws`, STOMP subprotocol `v12.stomp`.
 
-A frame is `command EOL (header EOL)* EOL body NUL`. If you include `content-length`, the `NUL` must
-come immediately after the body with no trailing newline.
+A frame is `command EOL (header EOL)* EOL body NUL`. If you send `content-length`, the `NUL` must
+follow the body immediately — no trailing newline.
 
 ### Connect
-
-Send the token in the CONNECT frame's `Authorization` header:
 
 ```
 CONNECT
@@ -100,29 +145,30 @@ Authorization:Bearer <accessToken>
 ```
 
 `heart-beat` is required by STOMP 1.2. A valid token is answered with `CONNECTED`; a missing,
-malformed or expired token is answered with `ERROR`. Rejection is silent otherwise, so treat
-`ERROR` as "reconnect and re-authenticate".
+malformed or expired token is answered with `ERROR`. Rejection is silent otherwise, so treat `ERROR`
+during connect as "re-authenticate".
 
-### Subscribe
+### Destinations
 
 Per-user channels, using **your own** user id:
 
 | Destination | Payload |
 | --- | --- |
-| `/topic/user.{userId}/messages` | a new message |
-| `/topic/user.{userId}/receipts` | delivery/read status for a message you sent |
-| `/topic/user.{userId}/typing` | `{chatId, userId, at}` |
-| `/topic/user.{userId}/presence` | your own presence change |
+| `/topic/user.{userId}.messages` | a new message, including your own |
+| `/topic/user.{userId}.receipts` | delivery/read status for a message you sent |
+| `/topic/user.{userId}.typing` | `{chatId, userId, at}` |
+| `/topic/user.{userId}.presence` | your own presence change |
 
 Per-chat channels:
 
 | Destination | Payload |
 | --- | --- |
-| `/topic/chat.{chatId}/read` | a receipt from anyone in the chat |
-| `/topic/chat.{chatId}/online-users` | a member's presence change |
+| `/topic/chat.{chatId}.read` | a receipt from any member |
+| `/topic/chat.{chatId}.online-users` | a member's presence change |
 
-Subscribing to `/topic/user.{someoneElse}/...` is rejected. You only ever receive your own per-user
-traffic.
+Separators are **dots**, not slashes — they map to RabbitMQ topic routing keys, which reject `/`.
+Subscribing to `/topic/user.{someoneElse}...` is rejected, so you only ever receive your own
+per-user traffic.
 
 ### Send
 
@@ -133,11 +179,11 @@ traffic.
   "type": "TEXT", "replyToId": null }
 ```
 
-`clientMessageId` is required and must be unique per message. Generate it once on the client and
-reuse it for retries — resending the same `clientMessageId` is idempotent and will not create a
-duplicate, so you can safely retry on reconnect. The server echoes the saved message back to you on
-`/topic/user.{yourId}/messages` alongside every other recipient, so you can confirm from the same
-channel you send to.
+`clientMessageId` is required and unique per message. Generate it once on the client and reuse it
+across retries — resending the same value is **idempotent** and will not create a duplicate, so you
+can retry safely on reconnect. The saved message is echoed back to you on
+`/topic/user.{yourId}.messages` alongside every other recipient, so confirm from the same channel
+you send on.
 
 ### Receipts
 
@@ -148,24 +194,26 @@ channel you send to.
 ```
 
 Send `DELIVERED` when a message reaches the device and `READ` when the chat is open. The original
-sender receives it on `/topic/user.{senderId}/receipts`. Status only moves forward — a stale
+sender receives it on `/topic/user.{senderId}.receipts`. Status only ever moves forward — a stale
 `DELIVERED` replayed after a `READ` is ignored, so ticks never regress.
 
 ### Typing
 
 `SEND` to `/app/chat.typing` with `{messageId, status, occurredAt}`. Other members receive
-`{chatId, userId, at}`. Include any `messageId` the recipient can see in that chat; it is used only
-to resolve the chat.
+`{chatId, userId, at}`. The `messageId` is only used to resolve the chat, so pass any message id
+visible in it.
+
+---
 
 ## Presence
 
-`isOnline` in user payloads and chat participants reflects whether the user has at least one live
-WebSocket session. On disconnect, `lastSeen` is stamped. Presence is best-effort: if the server
-dies while a user is connected, `isOnline` stays true until their next connection replaces it.
+`isOnline` reflects whether the user has at least one live WebSocket session; on disconnect
+`lastSeen` is stamped. Best-effort: if the server dies mid-session, `isOnline` stays `true` until
+that user's next connection replaces it.
 
-## Encryption
+## Security notes
 
-Message content is encrypted at rest with AES-256-GCM and decrypted on read, so `content` in
-responses is already plaintext. This is transport-independent — put TLS in front of this service for
-anything beyond local development. `User.publicKey` exists for end-to-end encryption but is not yet
-used; messages are currently readable by the server.
+Message content is encrypted **at rest** with AES-256-GCM and decrypted on read, so responses are
+plaintext. This is server-side encryption, **not** end-to-end — the application can read every
+message. There is no `publicKey` field and no E2E support. Put TLS in front of this service for
+anything beyond local development.

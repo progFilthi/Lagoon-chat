@@ -26,7 +26,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter(AccessLevel.PACKAGE)
-@ToString(exclude = { "passwordHash", "publicKey" })
+@ToString(exclude = "passwordHash")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
@@ -44,9 +44,6 @@ public class User {
 
 	@Column(name = "password_hash", nullable = false, length = 100)
 	private String passwordHash;
-
-	@Column(name = "public_key", columnDefinition = "text")
-	private String publicKey;
 
 	@Column(name = "profile_picture_url", length = 500)
 	private String profilePictureUrl;

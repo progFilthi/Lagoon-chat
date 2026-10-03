@@ -67,7 +67,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 		if (destination == null || !destination.startsWith(USER_TOPIC_PREFIX)) {
 			return;
 		}
-		int separator = destination.indexOf('/', USER_TOPIC_PREFIX.length());
+		int separator = destination.indexOf('.', USER_TOPIC_PREFIX.length());
 		String requestedUserId = separator < 0 ? destination.substring(USER_TOPIC_PREFIX.length())
 				: destination.substring(USER_TOPIC_PREFIX.length(), separator);
 		if (!(authentication.getPrincipal() instanceof AuthenticatedUser user)

@@ -23,6 +23,31 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    container_name: whatsapp-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP, for tooling and future consumers
+      - "61613:61613" # STOMP, what the Spring broker relay speaks
+      - "15672:15672" # management UI at http://localhost:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: whatsapp
+      RABBITMQ_DEFAULT_PASS: whatsapp_secret
+    # The relay speaks STOMP, so the stomp plugin has to be on. The management image does not
+    # enable it by default.
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_stomp rabbitmq_management &&
+             rabbitmq-server"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:

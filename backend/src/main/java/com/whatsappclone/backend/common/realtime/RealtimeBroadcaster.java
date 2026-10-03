@@ -14,6 +14,9 @@ import java.util.UUID;
  * {@code convertAndSendToUser} call degrades into a silent no-op. Explicit destinations need no
  * Principal and, because the inbound channel authorises SUBSCRIBE, they can be locked down per
  * user. See {@code StompAuthChannelInterceptor}.
+ *
+ * Destinations are dot separated rather than slash separated because RabbitMQ's topic exchange
+ * validates each word of the routing key and rejects any containing {@code /}.
  */
 @Service
 public class RealtimeBroadcaster {
@@ -28,10 +31,10 @@ public class RealtimeBroadcaster {
 	}
 
 	public void sendToUser(UUID userId, String channel, Object payload) {
-		messagingTemplate.convertAndSend(USER_PREFIX + userId + "/" + channel, payload);
+		messagingTemplate.convertAndSend(USER_PREFIX + userId + "." + channel, payload);
 	}
 
 	public void sendToChat(UUID chatId, String channel, Object payload) {
-		messagingTemplate.convertAndSend(CHAT_PREFIX + chatId + "/" + channel, payload);
+		messagingTemplate.convertAndSend(CHAT_PREFIX + chatId + "." + channel, payload);
 	}
 }

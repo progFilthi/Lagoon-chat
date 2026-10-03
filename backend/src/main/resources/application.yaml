@@ -48,8 +48,19 @@ app:
     access-token-ttl: 30d
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  messaging:
+    # STOMP broker relay. Running more than one app instance requires this, otherwise each
+    # instance only sees the messages published by its own in-memory broker.
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_STOMP_PORT:61613}
+    login: ${RABBITMQ_USER:whatsapp}
+    passcode: ${RABBITMQ_PASSWORD:whatsapp_secret}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    heartbeat-send-interval: 10000
+    heartbeat-receive-interval: 10000
   encryption:
-    # Key for encrypting message content at rest. Override outside local dev.
+    # Encrypts message content at rest. This is server-side encryption, not end-to-end:
+    # the application decrypts on read. Override outside local dev.
     content-key: ${MESSAGE_ENCRYPTION_KEY:dev-only-content-key-0123456789abcdef}
   presence:
     key-prefix: "presence:"
