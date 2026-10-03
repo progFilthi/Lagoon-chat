@@ -141,8 +141,25 @@ public class ChatService {
 				.orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "User not found"));
 	}
 
+	/**
+	 * Renders the chat-list preview. An attachment has no text of its own, so it is labelled by kind
+	 * and falls back to the caption when one was typed — otherwise the list would show a raw S3 key.
+	 */
 	private String previewOf(Message message) {
 		String content = contentEncryptionService.decrypt(message.getContent());
+		if (message.isMedia()) {
+			String label = switch (message.getType()) {
+				case IMAGE -> "Photo";
+				case VIDEO -> "Video";
+				case AUDIO -> "Audio";
+				case TEXT -> "";
+			};
+			return content.isBlank() ? label : label + ": " + firstLine(content);
+		}
+		return firstLine(content);
+	}
+
+	private String firstLine(String content) {
 		int newline = content.indexOf('\n');
 		return newline >= 0 && newline < 40 ? content.substring(0, newline) + "..." : content;
 	}

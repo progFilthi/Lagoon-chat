@@ -35,7 +35,7 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter(AccessLevel.PACKAGE)
-@ToString(exclude = { "chat", "sender", "content" })
+@ToString(exclude = { "chat", "sender", "content", "mediaKey" })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Message {
 
@@ -56,6 +56,13 @@ public class Message {
 	@Column(name = "content", nullable = false, columnDefinition = "text")
 	private String content;
 
+	/**
+	 * S3 object key for media messages, null for text. The bytes never touch this service; the
+	 * bucket stays private and clients fetch a short-lived signed URL instead.
+	 */
+	@Column(name = "media_key", length = 512)
+	private String mediaKey;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "type", nullable = false, length = 20)
 	private MessageType type;
@@ -69,7 +76,7 @@ public class Message {
 	private Instant createdAt;
 
 	public static Message create(Chat chat, User sender, String clientMessageId, String encryptedContent,
-			MessageType type, Message replyTo) {
+			MessageType type, Message replyTo, String mediaKey) {
 		Message message = new Message();
 		message.id = UUID.randomUUID();
 		message.chat = chat;
@@ -78,6 +85,12 @@ public class Message {
 		message.content = encryptedContent;
 		message.type = type;
 		message.replyTo = replyTo;
+		message.mediaKey = mediaKey;
 		return message;
+	}
+
+	/** True when the message body is an attachment rather than something the user typed. */
+	public boolean isMedia() {
+		return mediaKey != null;
 	}
 }
