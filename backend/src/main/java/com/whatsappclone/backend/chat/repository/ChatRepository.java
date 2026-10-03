@@ -1,7 +1,6 @@
 package com.whatsappclone.backend.chat.repository;
 
 import com.whatsappclone.backend.chat.model.Chat;
-import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,7 +16,7 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
 			select c from Chat c
 			where c.id in (select cp.chat.id from ChatParticipant cp where cp.user.id = :userId)
 			""")
-	Slice<Chat> findAllForUser(@Param("userId") UUID userId, Pageable pageable);
+	List<Chat> findAllForUser(@Param("userId") UUID userId, Pageable pageable);
 
 	@Query("""
 			select c from Chat c

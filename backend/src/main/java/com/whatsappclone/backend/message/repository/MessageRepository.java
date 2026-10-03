@@ -19,16 +19,26 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
 	 * Keyset (cursor) pagination walking backwards through history. The cursor is the
 	 * {@code (createdAt, id)} pair of the oldest message already seen; ties on createdAt are
 	 * broken by id so the page boundary is stable.
+	 *
+	 * Split into two statements rather than one with a {@code :param is null} guard: Postgres
+	 * cannot infer the type of an untyped null bind parameter, and a single null-guarded query
+	 * also stops the planner from using the {@code (chat_id, created_at, id)} index cleanly.
 	 */
 	@Query("""
 			select m from Message m
 			where m.chat.id = :chatId
-			  and (:cursorCreatedAt is null
-			       or m.createdAt < :cursorCreatedAt
+			order by m.createdAt desc, m.id desc
+			""")
+	List<Message> findFirstPage(@Param("chatId") UUID chatId, Pageable pageable);
+
+	@Query("""
+			select m from Message m
+			where m.chat.id = :chatId
+			  and (m.createdAt < :cursorCreatedAt
 			       or (m.createdAt = :cursorCreatedAt and m.id < :cursorId))
 			order by m.createdAt desc, m.id desc
 			""")
-	List<Message> findHistoryBefore(@Param("chatId") UUID chatId,
+	List<Message> findPageBefore(@Param("chatId") UUID chatId,
 			@Param("cursorCreatedAt") Instant cursorCreatedAt,
 			@Param("cursorId") UUID cursorId,
 			Pageable pageable);

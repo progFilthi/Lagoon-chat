@@ -9,6 +9,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
@@ -21,14 +22,17 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 	private static final String AUTHORIZATION_HEADER = "Authorization";
 	private static final String BEARER_PREFIX = "Bearer ";
 	private static final String ROLE_USER = "ROLE_USER";
+	private static final String USER_TOPIC_PREFIX = "/topic/user.";
 
 	private static final Set<StompCommand> REQUIRES_AUTH = Set.of(StompCommand.SEND, StompCommand.SUBSCRIBE,
 			StompCommand.UNSUBSCRIBE, StompCommand.ACK, StompCommand.NACK, StompCommand.BEGIN);
 
 	private final JwtService jwtService;
+	private final StompSessionRegistry sessionRegistry;
 
-	public StompAuthChannelInterceptor(JwtService jwtService) {
+	public StompAuthChannelInterceptor(JwtService jwtService, StompSessionRegistry sessionRegistry) {
 		this.jwtService = jwtService;
+		this.sessionRegistry = sessionRegistry;
 	}
 
 	@Override
@@ -39,15 +43,40 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 			return message;
 		}
 		if (command == StompCommand.CONNECT || command == StompCommand.STOMP) {
-			authenticate(accessor);
+			Authentication authentication = authenticate(accessor);
+			StompPrincipal.store(accessor, authentication);
+			sessionRegistry.register(accessor.getSessionId(), authentication);
 		}
-		else if (REQUIRES_AUTH.contains(command) && accessor.getUser() == null) {
-			throw new AccessDeniedException("Not authenticated");
+		else if (command == StompCommand.DISCONNECT) {
+			sessionRegistry.remove(accessor.getSessionId());
+		}
+		else if (REQUIRES_AUTH.contains(command)) {
+			Authentication authentication = StompPrincipal.resolve(accessor);
+			if (authentication == null) {
+				throw new AccessDeniedException("Not authenticated");
+			}
+			if (command == StompCommand.SUBSCRIBE) {
+				authorizeSubscription(accessor, authentication);
+			}
 		}
 		return message;
 	}
 
-	private void authenticate(StompHeaderAccessor accessor) {
+	private void authorizeSubscription(StompHeaderAccessor accessor, Authentication authentication) {
+		String destination = accessor.getDestination();
+		if (destination == null || !destination.startsWith(USER_TOPIC_PREFIX)) {
+			return;
+		}
+		int separator = destination.indexOf('/', USER_TOPIC_PREFIX.length());
+		String requestedUserId = separator < 0 ? destination.substring(USER_TOPIC_PREFIX.length())
+				: destination.substring(USER_TOPIC_PREFIX.length(), separator);
+		if (!(authentication.getPrincipal() instanceof AuthenticatedUser user)
+				|| !user.id().toString().equals(requestedUserId)) {
+			throw new AccessDeniedException("Cannot subscribe to another user's queue");
+		}
+	}
+
+	private Authentication authenticate(StompHeaderAccessor accessor) {
 		String token = resolveToken(accessor);
 		if (token == null) {
 			throw new AccessDeniedException("Missing Authorization token");
@@ -59,8 +88,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 		catch (RuntimeException e) {
 			throw new AccessDeniedException("Invalid Authorization token", e);
 		}
-		accessor.setUser(new UsernamePasswordAuthenticationToken(principal, null,
-				List.of(new SimpleGrantedAuthority(ROLE_USER))));
+		return new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority(ROLE_USER)));
 	}
 
 	private String resolveToken(StompHeaderAccessor accessor) {
