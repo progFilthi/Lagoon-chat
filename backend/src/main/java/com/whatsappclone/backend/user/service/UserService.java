@@ -3,7 +3,7 @@ package com.whatsappclone.backend.user.service;
 import com.whatsappclone.backend.common.crypto.HashUtils;
 import com.whatsappclone.backend.common.exception.AppException;
 import com.whatsappclone.backend.common.exception.ErrorCode;
-import com.whatsappclone.backend.user.dto.SyncedContact;
+import com.whatsappclone.backend.user.dto.UserProfileResponse;
 import com.whatsappclone.backend.user.model.User;
 import com.whatsappclone.backend.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -23,13 +23,18 @@ public class UserService {
 		this.userRepository = userRepository;
 	}
 
+	/**
+	 * Resolves local contact numbers to registered users. Hashing the numbers client-side is not an
+	 * option here because the client sends them in the clear; the server hashes before querying so
+	 * the lookup never runs against the plaintext column.
+	 */
 	@Transactional(readOnly = true)
-	public List<SyncedContact> syncContacts(List<String> phoneNumbers) {
+	public List<UserProfileResponse> syncContacts(List<String> phoneNumbers) {
 		Set<String> hashes = new LinkedHashSet<>();
 		for (String phoneNumber : phoneNumbers) {
 			hashes.add(HashUtils.sha256Hex(phoneNumber));
 		}
-		return userRepository.findAllByPhoneNumberHashIn(hashes).stream().map(SyncedContact::from).toList();
+		return userRepository.findAllByPhoneNumberHashIn(hashes).stream().map(UserProfileResponse::from).toList();
 	}
 
 	@Transactional(readOnly = true)

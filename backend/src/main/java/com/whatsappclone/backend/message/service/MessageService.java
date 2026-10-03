@@ -2,7 +2,6 @@ package com.whatsappclone.backend.message.service;
 
 import com.whatsappclone.backend.chat.model.Chat;
 import com.whatsappclone.backend.chat.model.ChatParticipant;
-import com.whatsappclone.backend.chat.model.ChatRole;
 import com.whatsappclone.backend.chat.repository.ChatParticipantRepository;
 import com.whatsappclone.backend.chat.repository.ChatRepository;
 import com.whatsappclone.backend.common.api.PageResponse;
@@ -11,11 +10,12 @@ import com.whatsappclone.backend.common.exception.AppException;
 import com.whatsappclone.backend.common.exception.ErrorCode;
 import com.whatsappclone.backend.message.dto.MessageCursor;
 import com.whatsappclone.backend.message.dto.MessageResponse;
+import com.whatsappclone.backend.message.dto.MessageResponse.ReceiptSummary;
 import com.whatsappclone.backend.message.dto.SendMessagePayload;
-import com.whatsappclone.backend.message.dto.SendMessageResponse;
 import com.whatsappclone.backend.message.model.Message;
 import com.whatsappclone.backend.message.model.MessageReceipt;
 import com.whatsappclone.backend.message.model.MessageStatus;
+import com.whatsappclone.backend.message.model.MessageType;
 import com.whatsappclone.backend.message.repository.MessageReceiptRepository;
 import com.whatsappclone.backend.message.repository.MessageRepository;
 import com.whatsappclone.backend.user.repository.UserRepository;
@@ -57,12 +57,12 @@ public class MessageService {
 	}
 
 	@Transactional
-	public SendMessageResponse save(UUID senderId, SendMessagePayload payload) {
+	public MessageResponse save(UUID senderId, SendMessagePayload payload) {
 		Optional<Message> duplicate = messageRepository.findBySenderIdAndClientMessageId(senderId,
 				payload.clientMessageId());
 		if (duplicate.isPresent()) {
-			return toResponse(duplicate.get(), chatParticipantRepository.findByChatIdAndUserId(payload.chatId(),
-					senderId).map(ChatParticipant::getRole).orElse(ChatRole.MEMBER));
+			return project(senderId, duplicate.get(),
+					messageReceiptRepository.findByMessageId(duplicate.get().getId()));
 		}
 
 		ChatParticipant senderMembership = chatParticipantRepository
@@ -70,6 +70,10 @@ public class MessageService {
 				.orElseThrow(() -> new AppException(ErrorCode.NOT_CHAT_PARTICIPANT,
 						"You are not a member of this chat"));
 		Chat chat = senderMembership.getChat();
+
+		MessageType messageType = payload.messageType();
+		String content = payload.content() != null ? payload.content() : "";
+		String mediaKey = resolveMediaKey(payload, senderId, messageType, content);
 
 		Message replyTo = null;
 		if (payload.replyToId() != null) {
@@ -79,7 +83,7 @@ public class MessageService {
 		}
 
 		Message created = Message.create(chat, senderMembership.getUser(), payload.clientMessageId(),
-				contentEncryptionService.encrypt(payload.content()), payload.messageType(), replyTo);
+				contentEncryptionService.encrypt(content), messageType, replyTo, mediaKey);
 		Message message = messageRepository.saveAndFlush(created);
 
 		List<ChatParticipant> members = chatParticipantRepository.findByChatId(payload.chatId());
@@ -92,7 +96,7 @@ public class MessageService {
 		chat.touch(message.getCreatedAt());
 		chatRepository.save(chat);
 
-		return toResponse(message, senderMembership.getRole());
+		return project(senderId, message, receipts);
 	}
 
 	@Transactional(readOnly = true)
@@ -132,8 +136,12 @@ public class MessageService {
 				MessageStatus.DELIVERED, MessageStatus.READ, now) > 0;
 	}
 
+	/**
+	 * Marks everything currently in the chat read for this user and returns the instant applied, so
+	 * the caller can broadcast the same value it persisted rather than re-deriving it.
+	 */
 	@Transactional
-	public void markChatRead(UUID requesterId, UUID chatId, Instant readAt) {
+	public Instant markChatRead(UUID requesterId, UUID chatId, Instant readAt) {
 		ChatParticipant participant = chatParticipantRepository.findByChatIdAndUserId(chatId, requesterId)
 				.orElseThrow(() -> new AppException(ErrorCode.NOT_CHAT_PARTICIPANT,
 						"You are not a member of this chat"));
@@ -143,7 +151,7 @@ public class MessageService {
 
 		List<Message> recent = messageRepository.findLatestInChat(chatId, PageRequest.of(0, MAX_PAGE_SIZE));
 		if (recent.isEmpty()) {
-			return;
+			return effective;
 		}
 		Set<UUID> ids = recent.stream().map(Message::getId).collect(Collectors.toSet());
 		List<MessageReceipt> receipts = messageReceiptRepository.findForUserAndMessages(requesterId, ids);
@@ -153,6 +161,7 @@ public class MessageService {
 			}
 		}
 		messageReceiptRepository.saveAll(receipts);
+		return effective;
 	}
 
 	@Transactional(readOnly = true)
@@ -165,39 +174,71 @@ public class MessageService {
 		return chatParticipantRepository.findByChatId(chatId).stream().map(p -> p.getUser().getId()).toList();
 	}
 
-	private List<MessageResponse> toResponses(UUID requesterId, List<Message> messages) {
+	/**
+	 * Enforces the two invariants that annotations cannot express: a text message must carry a body,
+	 * and an attachment must reference an object the sender actually uploaded.
+	 *
+	 * <p>The key prefix check is the authorisation boundary for media. Keys are issued by
+	 * {@code MediaService} under {@code media/{userId}/}, so requiring that prefix means a sender
+	 * cannot attach someone else's object — otherwise they could post it to their own chat and have
+	 * the whole chat download a file they never had access to.
+	 */
+	private String resolveMediaKey(SendMessagePayload payload, UUID senderId, MessageType type, String content) {
+		boolean wantsMedia = type != MessageType.TEXT;
+		String mediaKey = payload.mediaKey();
+
+		if (!wantsMedia) {
+			if (mediaKey != null && !mediaKey.isBlank()) {
+				throw new AppException(ErrorCode.VALIDATION_ERROR, "mediaKey is only valid on media messages");
+			}
+			if (content.isBlank()) {
+				throw new AppException(ErrorCode.VALIDATION_ERROR, "content is required on a TEXT message");
+			}
+			return null;
+		}
+
+		if (mediaKey == null || mediaKey.isBlank()) {
+			throw new AppException(ErrorCode.VALIDATION_ERROR, "mediaKey is required on a " + type + " message");
+		}
+		String expectedPrefix = "media/" + senderId + "/";
+		if (!mediaKey.startsWith(expectedPrefix)) {
+			throw new AppException(ErrorCode.VALIDATION_ERROR, "mediaKey was not issued to you");
+		}
+		return mediaKey;
+	}
+
+	private List<MessageResponse> toResponses(UUID viewerId, List<Message> messages) {
 		if (messages.isEmpty()) {
 			return List.of();
 		}
 		List<UUID> messageIds = messages.stream().map(Message::getId).toList();
-		List<MessageReceipt> receipts = messageReceiptRepository.findByMessageIdIn(messageIds);
-		Map<UUID, List<MessageReceipt>> byMessage = receipts.stream()
+		Map<UUID, List<MessageReceipt>> byMessage = messageReceiptRepository.findByMessageIdIn(messageIds).stream()
 				.collect(Collectors.groupingBy(receipt -> receipt.getMessage().getId()));
-		Set<UUID> ownMessages = messages.stream()
-				.filter(message -> message.getSender().getId().equals(requesterId))
-				.map(Message::getId)
-				.collect(Collectors.toSet());
 
 		List<MessageResponse> responses = new ArrayList<>(messages.size());
 		for (Message message : messages) {
-			List<MessageReceipt> messageReceipts = byMessage.getOrDefault(message.getId(), List.of());
-			boolean senderView = ownMessages.contains(message.getId());
-			List<UUID> recipients = senderView ? messageReceipts.stream().map(r -> r.getRecipient().getId()).toList()
-					: List.of();
-			List<UUID> delivered = senderView ? messageReceipts.stream()
-					.filter(r -> r.getStatus().isAtLeast(MessageStatus.DELIVERED)).map(r -> r.getRecipient().getId())
-					.toList() : List.of();
-			List<UUID> read = senderView ? messageReceipts.stream()
-					.filter(r -> r.getStatus() == MessageStatus.READ).map(r -> r.getRecipient().getId()).toList()
-					: List.of();
-			responses.add(MessageResponse.from(message, contentEncryptionService.decrypt(message.getContent()),
-					recipients, delivered, read));
+			responses.add(project(viewerId, message, byMessage.getOrDefault(message.getId(), List.of())));
 		}
 		return responses;
 	}
 
-	private SendMessageResponse toResponse(Message message, ChatRole role) {
-		return new SendMessageResponse(message.getId(), message.getChat().getId(), message.getClientMessageId(),
-				message.getType(), message.getCreatedAt(), role);
+	/**
+	 * The one projection of a message used by every surface: history, and the broadcast sent on
+	 * {@code chat.send}. There is deliberately no second shape for the socket, because a client
+	 * holding two shapes for the same message has to reconcile them on every send — and the socket
+	 * version is the one carrying no {@code content}, so a recipient cannot render the message
+	 * without refetching history.
+	 *
+	 * <p>Receipt counts are only populated for the viewer's own messages. On anyone else's you
+	 * already know the state, and populating it would tell the whole group who has read what.
+	 */
+	private MessageResponse project(UUID viewerId, Message message, List<MessageReceipt> receipts) {
+		boolean senderView = message.getSender().getId().equals(viewerId);
+		ReceiptSummary summary = senderView
+				? new ReceiptSummary(receipts.size(),
+						(int) receipts.stream().filter(r -> r.getStatus().isAtLeast(MessageStatus.DELIVERED)).count(),
+						(int) receipts.stream().filter(r -> r.getStatus() == MessageStatus.READ).count())
+				: new ReceiptSummary(0, 0, 0);
+		return MessageResponse.from(message, contentEncryptionService.decrypt(message.getContent()), summary);
 	}
 }

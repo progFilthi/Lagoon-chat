@@ -3,7 +3,6 @@ package com.whatsappclone.backend.user.controller;
 import com.whatsappclone.backend.common.api.ApiResponse;
 import com.whatsappclone.backend.security.resolver.CurrentUser;
 import com.whatsappclone.backend.user.dto.SyncContactsRequest;
-import com.whatsappclone.backend.user.dto.SyncedContact;
 import com.whatsappclone.backend.user.dto.UserProfileResponse;
 import com.whatsappclone.backend.user.model.User;
 import com.whatsappclone.backend.user.service.UserService;
@@ -29,7 +28,7 @@ public class UserController {
 	}
 
 	@PostMapping("/sync")
-	public ApiResponse<List<SyncedContact>> sync(@Valid @RequestBody SyncContactsRequest request) {
+	public ApiResponse<List<UserProfileResponse>> sync(@Valid @RequestBody SyncContactsRequest request) {
 		return ApiResponse.ok(userService.syncContacts(request.phoneNumbers()));
 	}
 

@@ -29,6 +29,8 @@
 	<properties>
 		<java.version>25</java.version>
 		<jjwt.version>0.12.6</jjwt.version>
+		<!-- The Spring Boot BOM does not manage the AWS SDK, so it is pinned explicitly. -->
+		<awssdk.version>2.55.11</awssdk.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -91,6 +93,13 @@
 			<artifactId>jjwt-jackson</artifactId>
 			<version>${jjwt.version}</version>
 			<scope>runtime</scope>
+		</dependency>
+		<!-- S3 client and presigner. Presigning is local computation, so no S3 call is made
+		     while issuing an upload or download URL. -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>${awssdk.version}</version>
 		</dependency>
 
 		<dependency>

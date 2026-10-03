@@ -2,6 +2,13 @@ spring:
   application:
     name: backend
 
+  # Local secrets live in backend/.env, which is git-ignored. The `[.properties]` hint is required:
+  # without it Spring tries to parse the file as YAML and fails on `KEY=value` lines. `optional:`
+  # keeps startup working when the file is absent, which is what CI and production rely on --
+  # there the same variables come from the real environment instead.
+  config:
+    import: "optional:file:.env[.properties]"
+
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:whatsapp_clone}
     username: ${POSTGRES_USER:whatsapp_user}
@@ -64,6 +71,21 @@ app:
     content-key: ${MESSAGE_ENCRYPTION_KEY:dev-only-content-key-0123456789abcdef}
   presence:
     key-prefix: "presence:"
+  media:
+    # Private S3 bucket. Leave MEDIA_BUCKET empty to run without media: the endpoints then return
+    # MEDIA_NOT_CONFIGURED (503) instead of failing startup, so frontend work is never blocked on
+    # AWS being set up. Credentials come from the AWS SDK default provider chain — never configure
+    # them here, and never expose them to a browser.
+    bucket: ${MEDIA_BUCKET:}
+    region: ${AWS_REGION:us-east-1}
+    # Short because a signed URL is a bearer token for one object. The download TTL is deliberately
+    # not cache-friendly; a CDN in front of the bucket is the fix if that becomes a problem.
+    upload-url-ttl: ${MEDIA_UPLOAD_URL_TTL:5m}
+    download-url-ttl: ${MEDIA_DOWNLOAD_URL_TTL:15m}
+    max-bytes: ${MEDIA_MAX_BYTES:26214400}
+    # Extensions are pinned here rather than derived from the media type, so a client cannot choose
+    # the stored object's suffix.
+    allowed-content-types: ${MEDIA_ALLOWED_CONTENT_TYPES:image/jpeg=jpg,image/png=png,image/webp=webp,image/gif=gif,video/mp4=mp4,video/webm=webm,audio/mpeg=mp3,audio/mp4=m4a,audio/ogg=ogg,audio/webm=webm}
 
 logging:
   level:
