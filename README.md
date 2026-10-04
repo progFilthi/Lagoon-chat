@@ -1,4 +1,4 @@
-# WhatsApp Clone
+# Lagoon Chat
 
 A production-shaped, real-time messaging app built from scratch — Spring Boot and PostgreSQL on the
 back, Next.js on the front, with direct-to-S3 media uploads and a STOMP-over-WebSocket realtime layer.
