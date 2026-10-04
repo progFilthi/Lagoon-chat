@@ -14,6 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -91,7 +92,28 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 		return new UsernamePasswordAuthenticationToken(principal, null, List.of(new SimpleGrantedAuthority(ROLE_USER)));
 	}
 
+	/**
+	 * Resolves the bearer token for a CONNECT frame from either source, in order.
+	 *
+	 * <p>The explicit STOMP {@code Authorization} header wins, because it is what a non-browser client
+	 * sends and it keeps the token out of the transport entirely. The cookie is the fallback, and is
+	 * the only thing a browser can offer: JavaScript builds the CONNECT frame and the WebSocket API
+	 * cannot set request headers, so a browser holding its token in an httpOnly cookie has no way to
+	 * put it in a STOMP header. {@link JwtCookieHandshakeInterceptor} captured it from the upgrade
+	 * request, where the browser sends cookies on its own.
+	 *
+	 * <p>Preferring the header is also the safer order. A client that can set the header is not
+	 * relying on ambient cookie state, so a cross-site request cannot borrow the session.
+	 */
 	private String resolveToken(StompHeaderAccessor accessor) {
+		String header = bearerHeader(accessor);
+		if (header != null) {
+			return header;
+		}
+		return cookieToken(accessor);
+	}
+
+	private String bearerHeader(StompHeaderAccessor accessor) {
 		List<String> headers = accessor.getNativeHeader(AUTHORIZATION_HEADER);
 		if (headers != null && !headers.isEmpty()) {
 			String header = headers.getFirst();
@@ -101,6 +123,18 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 					return token;
 				}
 			}
+		}
+		return null;
+	}
+
+	private String cookieToken(StompHeaderAccessor accessor) {
+		Map<String, Object> sessionAttributes = accessor.getSessionAttributes();
+		if (sessionAttributes == null) {
+			return null;
+		}
+		Object captured = sessionAttributes.get(JwtCookieHandshakeInterceptor.ATTRIBUTE);
+		if (captured instanceof String token && !token.isBlank()) {
+			return token.trim();
 		}
 		return null;
 	}

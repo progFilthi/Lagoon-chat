@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="BackendApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="envFilePaths">
+      <option value="$PROJECT_DIR$/backend/.env" />
+    </option>
+    <module name="backend" />
+    <selectedOptions>
+      <option name="environmentVariables" />
+    </selectedOptions>
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.whatsappclone.backend.BackendApplication" />
+    <option name="VM_PARAMETERS" value="--enable-native-access=ALL-UNNAMED" />
+    <option name="WORKING_DIRECTORY" value="file://$MODULE_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

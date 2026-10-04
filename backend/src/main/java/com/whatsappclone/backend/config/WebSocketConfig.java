@@ -8,6 +8,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import com.whatsappclone.backend.security.ws.JwtCookieHandshakeInterceptor;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -18,6 +19,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 	private static final String ENDPOINT = "/ws";
 
 	private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
+	private final JwtCookieHandshakeInterceptor jwtCookieHandshakeInterceptor;
 	private final String relayHost;
 	private final int relayPort;
 	private final String relayLogin;
@@ -27,6 +29,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 	private final long heartbeatReceiveInterval;
 
 	public WebSocketConfig(StompAuthChannelInterceptor stompAuthChannelInterceptor,
+			JwtCookieHandshakeInterceptor jwtCookieHandshakeInterceptor,
 			@Value("${app.messaging.host}") String relayHost, @Value("${app.messaging.port}") int relayPort,
 			@Value("${app.messaging.login}") String relayLogin,
 			@Value("${app.messaging.passcode}") String relayPasscode,
@@ -34,6 +37,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 			@Value("${app.messaging.heartbeat-send-interval}") long heartbeatSendInterval,
 			@Value("${app.messaging.heartbeat-receive-interval}") long heartbeatReceiveInterval) {
 		this.stompAuthChannelInterceptor = stompAuthChannelInterceptor;
+		this.jwtCookieHandshakeInterceptor = jwtCookieHandshakeInterceptor;
 		this.relayHost = relayHost;
 		this.relayPort = relayPort;
 		this.relayLogin = relayLogin;
@@ -68,7 +72,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
 	@Override
 	public void registerStompEndpoints(StompEndpointRegistry registry) {
-		registry.addEndpoint(ENDPOINT).setAllowedOriginPatterns("*");
+		// Runs during the upgrade request, before any STOMP frame exists, which is the only point at
+		// which the browser's cookie is still readable on the server side.
+		registry.addEndpoint(ENDPOINT)
+				.addInterceptors(jwtCookieHandshakeInterceptor)
+				.setAllowedOriginPatterns("*");
 	}
 
 	@Override

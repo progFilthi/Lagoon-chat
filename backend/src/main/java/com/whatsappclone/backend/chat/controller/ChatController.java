@@ -7,6 +7,8 @@ import com.whatsappclone.backend.chat.dto.CreateChatResponse;
 import com.whatsappclone.backend.chat.service.ChatService;
 import com.whatsappclone.backend.common.api.ApiResponse;
 import com.whatsappclone.backend.common.api.PageResponse;
+import com.whatsappclone.backend.common.exception.AppException;
+import com.whatsappclone.backend.common.exception.ErrorCode;
 import com.whatsappclone.backend.common.realtime.RealtimeBroadcaster;
 import com.whatsappclone.backend.message.dto.MessageResponse;
 import com.whatsappclone.backend.message.service.MessageService;
@@ -60,9 +62,7 @@ public class ChatController {
 		return ApiResponse.ok(chatService.listChats(currentUserId).stream()
 				.filter(chat -> chat.id().equals(chatId))
 				.findFirst()
-				.orElseThrow(() -> new com.whatsappclone.backend.common.exception.AppException(
-						com.whatsappclone.backend.common.exception.ErrorCode.NOT_FOUND,
-						"Chat not found")));
+				.orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Chat not found")));
 	}
 
 	@GetMapping("/{chatId}/messages")
