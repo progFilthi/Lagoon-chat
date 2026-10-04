@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class BackendApplication {
 
-	public static void main(String[] args) {
+	 static void main(String[] args) {
 		SpringApplication.run(BackendApplication.class, args);
 	}
 

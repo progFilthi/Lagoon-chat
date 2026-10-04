@@ -1,26 +1,147 @@
 @import "tailwindcss";
 
+/*
+ * Lagoon design tokens.
+ *
+ * The values in :root are canonical and are a direct translation of the `--msg-*`
+ * Paper design tokens. They stay reachable as plain custom properties so they can
+ * be used in inline styles, SVG stroke attributes and anywhere Tailwind classes
+ * are not an option.
+ *
+ * `@theme inline` then maps each one into Tailwind's namespaces, which is what
+ * generates the utilities: bg-msg-accent, text-msg-ink, rounded-msg-md, and so on.
+ * `inline` keeps the var() reference rather than copying the value, so there is
+ * exactly one source of truth.
+ *
+ * Light mode only. There is no dark theme in v1, no `dark:` variant, and no
+ * prefers-color-scheme block. Do not add one.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --msg-ground: #ffffff;
+  --msg-surface: #f2f6f4;
+  --msg-surface-muted: #e4ebe8;
+  --msg-hairline: #d8e2df;
+
+  /* Ink */
+  --msg-ink: #0b201c;
+  --msg-ink-muted: #5e6c69;
+
+  /* Accent */
+  --msg-brand: #066b52;
+  --msg-accent: #0ba37f;
+  --msg-accent-text: #066b52;
+  --msg-accent-tint: #cff2e6;
+  --msg-accent-tint-border: #b3e3d2;
+  --msg-accent-muted: #0ba37f3d;
+  --msg-thread-top: #cbd8d4;
+
+  /*
+   * The only readable label colour on a jade fill. White on jade is 3.2:1 and
+   * fails AA; sea ink on jade is 5.3:1. Aliased rather than repeated so the two
+   * cannot drift.
+   */
+  --msg-on-accent: var(--msg-ink);
+
+  /* Signal colours — state only, never a surface */
+  --msg-unread: #ffc53d;
+  --msg-live: #ff6b57;
+  --msg-live-text: #b24b3d;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-msg-ground: var(--msg-ground);
+  --color-msg-surface: var(--msg-surface);
+  --color-msg-surface-muted: var(--msg-surface-muted);
+  --color-msg-hairline: var(--msg-hairline);
+  --color-msg-ink: var(--msg-ink);
+  --color-msg-ink-muted: var(--msg-ink-muted);
+  --color-msg-brand: var(--msg-brand);
+  --color-msg-accent: var(--msg-accent);
+  --color-msg-accent-text: var(--msg-accent-text);
+  --color-msg-accent-tint: var(--msg-accent-tint);
+  --color-msg-accent-tint-border: var(--msg-accent-tint-border);
+  --color-msg-accent-muted: var(--msg-accent-muted);
+  --color-msg-thread-top: var(--msg-thread-top);
+  --color-msg-on-accent: var(--msg-on-accent);
+  --color-msg-unread: var(--msg-unread);
+  --color-msg-live: var(--msg-live);
+  --color-msg-live-text: var(--msg-live-text);
+
+  --font-msg-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  /* Type scale. Each size carries its own line height and tracking. */
+  --text-msg-2xs: 11px;
+  --text-msg-2xs--line-height: 14px;
+
+  --text-msg-xs: 12px;
+  --text-msg-xs--line-height: 16px;
+
+  --text-msg-sm: 13px;
+  --text-msg-sm--line-height: 18px;
+
+  --text-msg-base: 14px;
+  --text-msg-base--line-height: 20px;
+
+  --text-msg-md: 15px;
+  --text-msg-md--line-height: 20px;
+
+  --text-msg-lg: 18px;
+  --text-msg-lg--line-height: 26px;
+
+  --text-msg-xl: 22px;
+  --text-msg-xl--line-height: 28px;
+  --text-msg-xl--letter-spacing: -0.03em;
+
+  --text-msg-2xl: 24px;
+  --text-msg-2xl--line-height: 32px;
+  --text-msg-2xl--letter-spacing: -0.02em;
+
+  --text-msg-3xl: 32px;
+  --text-msg-3xl--line-height: 38px;
+  --text-msg-3xl--letter-spacing: -0.03em;
+
+  --text-msg-display: 64px;
+  --text-msg-display--line-height: 70px;
+  --text-msg-display--letter-spacing: -0.04em;
+
+  --tracking-msg-wide: 0.1em;
+
+  --radius-msg-xs: 6px;
+  --radius-msg-sm: 10px;
+  --radius-msg-md: 14px;
+  --radius-msg-full: 999px;
+
+  --spacing-msg-2: 2px;
+  --spacing-msg-6: 6px;
+  --spacing-msg-8: 8px;
+  --spacing-msg-10: 10px;
+  --spacing-msg-12: 12px;
+  --spacing-msg-14: 14px;
+  --spacing-msg-20: 20px;
+  --spacing-msg-28: 28px;
+  --spacing-msg-48: 48px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    background-color: var(--msg-ground);
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background-color: var(--msg-ground);
+    color: var(--msg-ink);
+    font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * The focus ring is jade at 1px, never a glow. Applied globally so no control
+   * can ship without one.
+   */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 1px solid var(--msg-accent);
+    outline-offset: 1px;
+  }
 }

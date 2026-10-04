@@ -1,0 +1,42 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    Runs the Spring Boot application through the Maven wrapper.
+
+    Deliberately a Maven configuration rather than a "Spring Boot" template one. A Spring Boot
+    template configuration carries a <module> reference, and it reports itself as
+    "Broken configuration due to unavailable plugin or invalid configuration data" whenever that
+    module has not been resolved - which is exactly the state before backend/pom.xml has been
+    imported. A Maven configuration has no module reference at all: it points straight at the pom,
+    so it cannot be invalidated by module state.
+
+    Once the Maven project is imported (Maven tool window -> Reload All Maven Projects), the gutter
+    arrow on BackendApplication will offer IntelliJ's own "Spring Boot" template configuration, which
+    is worth switching to for debugger ergonomics. Both start the same application.
+  -->
+  <configuration default="false" name="BackendApplication" type="MavenRunConfiguration" factoryName="Maven">
+    <MavenSettings>
+      <option name="myGeneralSettings" />
+      <option name="myRunnerSettings" />
+      <option name="myRunnerParameters">
+        <MavenRunnerParameters>
+          <option name="cmdOptions" />
+          <option name="profiles">
+            <set />
+          </option>
+          <option name="goals">
+            <list>
+              <option value="spring-boot:run" />
+            </list>
+          </option>
+          <option name="pomFileName" value="$PROJECT_DIR$/backend/pom.xml" />
+          <option name="projectsCmdOptionValues">
+            <list />
+          </option>
+          <option name="resolveToWorkspace" value="false" />
+          <option name="workingDirPath" value="$PROJECT_DIR$/backend" />
+        </MavenRunnerParameters>
+      </option>
+    </MavenSettings>
+    <method v="2" />
+  </configuration>
+</component>

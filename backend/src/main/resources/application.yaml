@@ -90,3 +90,7 @@ app:
 logging:
   level:
     org.hibernate.SQL: INFO
+    # Netty logs this at ERROR when its macOS DNS resolver native library is absent, then falls back
+    # to system defaults. Harmless here -- the broker relay connects to a host, and the fallback is
+    # the system resolver -- so it is silenced rather than silenced-by-dependency.
+    io.netty.resolver.dns.DnsServerAddressStreamProviders: OFF

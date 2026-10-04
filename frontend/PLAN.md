@@ -130,16 +130,57 @@ CORS allows `http://localhost:3000`, which matches the dev server.
 
 ---
 
-## Design system — deliberately deferred
+## Design system — Lagoon, light only
 
-Paper has a **complete, well-considered token system** with two namespaces: a dark monochrome set and
-a light "Lagoon" messaging set built around a jade primary (`#0BA37F`) with amber, coral and sky
-accents on a green-tinted white ground. Light and dark are separate namespaces rather than one set
-with inverted values, which is the right call and worth preserving.
+**Light mode only.** There is no dark theme in v1 and no plan for one. Do not add a `dark:` variant,
+a colour-scheme toggle, or a second token namespace. One ground (`--msg-ground` #FFFFFF), one
+conversation surface (`--msg-surface` #F2F6F4), one accent.
 
-The Paper MCP hit its weekly limit, so component screenshots and structure could not be read. **Token
-values were captured before the limit; everything else was not.** Re-open Paper when access returns
-and translate the system into Tailwind 4 `@theme` — starting from the token values, not from
-scratch.
+Paper holds the system as **`--msg-*` design tokens — 81 of them, already created.** They are no
+longer a description in this document; they are the source of truth, and build step 1 is a
+translation of `get_tokens({format: "tailwind"})` into `globals.css`.
 
-No design work has been started, per instruction.
+Built so far in Paper: the DS board (palette, type, bubbles, conversation row, controls, presence &
+icons) and the desktop Chats screen. Auth screens follow.
+
+### What the token layer corrected
+
+Four colours the DS board's palette section never documented but the components actually use, now
+tokens: `--msg-hairline` #D8E2DF, `--msg-accent-tint-border` #B3E3D2, `--msg-surface-muted`
+#E4EBE8, `--msg-thread-top` #CBD8D4.
+
+Three accessibility rules the token descriptions now carry, because the drawings broke all three:
+
+- **`--msg-accent` #0BA37F is 3.2:1 on chalk.** Graphics, borders, focus rings and large text only.
+  Small text uses `--msg-accent-text` #066B52 (6.5:1). The DS used jade for the `typing…` preview,
+  the `online` label and the sender-name prefix; all three now use the readable form.
+- **`--msg-live` #FF6B57 is 2.8:1 on chalk.** Dots and pills only. Anything readable uses
+  `--msg-live-text` #B24B3D (5.29:1).
+- **`--msg-ink-muted` #5E6C69** is 66% sea ink, chosen because it clears AA on both ground *and*
+  surface. At 62% it would have failed on `--msg-surface`.
+
+### Scope: no calls
+
+v1 is auth, the conversation list, 1:1 and group chats, image attachments via presigned S3, and
+live messaging over the existing WebSocket contract. **Calls are not in v1.** The Paper file still
+has a `Lagoon Web — Calls` artboard and call affordances on the Chats screen (thread-header video
+and phone buttons, the nav-rail phone icon, "Calls" and "Pinned" filter chips); these are stale and
+must not be built. There is no Sky/calls token — `--msg-accent` is the only accent.
+
+`/api/chats` returns no pinned field, so the "Pinned" chip has nothing behind it either.
+
+### Copy must come from the server, not the mock
+
+The Chats artboard's placeholder rows disagree with `ChatService.previewOf`, which generates the
+preview string server-side:
+
+| Drawn placeholder | What the API actually returns |
+| --- | --- |
+| "Sent a photo" | `Photo` |
+| "Voice message · 0:24" | `Audio` |
+| "Missed outgoing call" | *(no calls in v1)* |
+| raw phone number as a preview | the decrypted content, first line |
+
+An attachment with a caption renders as `Photo: <caption>`. The sender prefix in a group preview
+("Kofi: …") is **not** in `lastMessagePreview` — build it client-side from `lastMessageSenderId`
+against `participants[]`. Do not hardcode the drawn strings into components.

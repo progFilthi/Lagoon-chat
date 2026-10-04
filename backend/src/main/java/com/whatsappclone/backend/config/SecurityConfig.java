@@ -1,5 +1,6 @@
-package com.whatsappclone.backend.auth;
+package com.whatsappclone.backend.config;
 
+import com.whatsappclone.backend.auth.JwtAuthenticationFilter;
 import com.whatsappclone.backend.common.api.ApiError;
 import com.whatsappclone.backend.common.api.ApiResponse;
 import com.whatsappclone.backend.common.exception.ErrorCode;

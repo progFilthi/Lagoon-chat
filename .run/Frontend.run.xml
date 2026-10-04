@@ -1,0 +1,22 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    A plain shell command rather than an npm run configuration: this project uses
+    bun as its package manager, and IntelliJ's npm runner would look for node and
+    the npm lockfile instead.
+  -->
+  <configuration default="false" name="Frontend" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="bun run dev" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/frontend" />
+    <method v="2" />
+  </configuration>
+
+  <!--
+    docker compose up -d, needed before the backend will start: Flyway, Redis
+    presence and the RabbitMQ STOMP relay all expect their containers to be up.
+  -->
+  <configuration default="false" name="Infra (docker compose)" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="docker compose up -d" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>
